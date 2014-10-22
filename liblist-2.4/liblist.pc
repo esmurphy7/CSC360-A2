@@ -1,0 +1,11 @@
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: liblist
+Description: A generic list package for C
+Version: 2.4
+URL: https://ohnopublishing.net/bugzilla/enter_bug.cgi?product=liblist
+Libs: -L${libdir} -llist
+Cflags: -I${includedir}

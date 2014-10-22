@@ -1,0 +1,138 @@
+========================= Train 1 =========================
+
+0 e:10,7
+1 e:10,5
+2 e:10,6
+3 w:10,7
+4 w:10,5
+5 w:10,6
+6 E:11,3
+7 W:6,7
+8 E:3,10
+9 E:3,8
+
+Train  8 is ready to go East
+Train  9 is ready to go East
+Train  8 is ON the main track going East
+Train  7 is ready to go West
+Train  5 is ready to go West
+Train  4 is ready to go West
+Train  3 is ready to go West
+Train  2 is ready to go East
+Train  1 is ready to go East
+Train  0 is ready to go East
+Train  6 is ready to go East
+Train  8 is OFF the main track after going East
+Train  7 is ON the main track going West
+Train  7 is OFF the main track after going West
+Train  9 is ON the main track going East
+Train  9 is OFF the main track after going East
+Train  6 is ON the main track going East
+Train  6 is OFF the main track after going East
+Train  3 is ON the main track going West
+Train  3 is OFF the main track after going West
+Train  0 is ON the main track going East
+Train  0 is OFF the main track after going East
+Train  4 is ON the main track going West
+Train  4 is OFF the main track after going West
+Train  1 is ON the main track going East
+Train  1 is OFF the main track after going East
+Train  5 is ON the main track going West
+Train  5 is OFF the main track after going West
+Train  2 is ON the main track going East
+Train  2 is OFF the main track after going East
+
+8 - 7 - 9 - 6 - 3 - 0 - 4 - 1 - 5 - 2
+
+========================= Train 2 =========================
+
+0 E:50,7
+1 E:30,5
+2 E:30,6
+3 W:50,7
+4 W:30,5
+5 W:30,6
+6 e:3,3
+7 w:3,7
+8 e:3,10
+9 e:3,1
+
+Train  6 is ready to go East
+Train  7 is ready to go West
+Train  8 is ready to go East
+Train  9 is ready to go East
+Train  6 is ON the main track going East
+Train  6 is OFF the main track after going East
+Train  7 is ON the main track going West
+Train  7 is OFF the main track after going West
+Train  8 is ON the main track going East
+Train  8 is OFF the main track after going East
+Train  9 is ON the main track going East
+Train  9 is OFF the main track after going East
+Train  5 is ready to go West
+Train  5 is ON the main track going West
+Train  4 is ready to go West
+Train  2 is ready to go East
+Train  1 is ready to go East
+Train  5 is OFF the main track after going West
+Train  1 is ON the main track going East
+Train  1 is OFF the main track after going East
+Train  4 is ON the main track going West
+Train  4 is OFF the main track after going West
+Train  2 is ON the main track going East
+Train  3 is ready to go West
+Train  0 is ready to go East
+Train  2 is OFF the main track after going East
+Train  3 is ON the main track going West
+Train  3 is OFF the main track after going West
+Train  0 is ON the main track going East
+Train  0 is OFF the main track after going East
+
+6 - 7 - 8 - 9 - 5 - 1 - 4 - 2 - 3 - 0
+
+========================= Train 3 =========================
+
+0 w:5,10
+1 e:6,3
+2 W:7,7
+3 w:7,3
+4 e:7,3
+5 W:9,3
+6 e:10,5
+7 E:10,7
+8 E:11,6
+9 w:11,7
+
+Train  0 is ready to go West
+Train  0 is ON the main track going West
+Train  1 is ready to go East
+Train  4 is ready to go East
+Train  3 is ready to go West
+Train  2 is ready to go West
+Train  5 is ready to go West
+Train  6 is ready to go East
+Train  7 is ready to go East
+Train  8 is ready to go East
+Train  9 is ready to go West
+Train  0 is OFF the main track after going West
+Train  7 is ON the main track going East
+Train  7 is OFF the main track after going East
+Train  2 is ON the main track going West
+Train  2 is OFF the main track after going West
+Train  8 is ON the main track going East
+Train  8 is OFF the main track after going East
+Train  5 is ON the main track going West
+Train  5 is OFF the main track after going West
+Train  1 is ON the main track going East
+Train  1 is OFF the main track after going East
+Train  3 is ON the main track going West
+Train  3 is OFF the main track after going West
+Train  4 is ON the main track going East
+Train  4 is OFF the main track after going East
+Train  9 is ON the main track going West
+Train  9 is OFF the main track after going West
+Train  6 is ON the main track going East
+Train  6 is OFF the main track after going East
+
+0 - 7 - 2 - 8 - 5 - 1 - 3 - 4 - 9 - 6
+
