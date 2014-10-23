@@ -1,0 +1,14 @@
+Store a shared variable that denotes the next train to cross
+Initialize a crossing condition variable for each train.
+Make a crossing mutex
+
+Create 2 pthreads for prioritizing ready trains.
+Producer thread: 
+	Writes trains to the ready set after being signalled that a train is done loading
+	Re-evaluates which train is next
+Consumer thread: 
+	Deletes trains from the ready set after being signalled that a train is done crossing
+	Re-evaluates which train is next
+	Signals the next train to begin crossing
+	
+Trains' load() function should attempt to lock a crossing mutex

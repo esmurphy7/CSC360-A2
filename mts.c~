@@ -1,13 +1,11 @@
 
-// TODO:
+// TODO: Synchronize trains to begin loading all at once
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
 #include <stdbool.h>
-#include <unistd.h>
-#include "slist.h"
 
 typedef struct
 {
@@ -19,16 +17,10 @@ typedef struct
 	pthread_cond_t condVar;
 } train;
 
-typedef struct
-{
-	char* filename;
-	int ntrains;
-} params;
-
 // ======= Prototypes ======
-void* init_trains(void*);
+void init_trains(char*,int);
 void init_trainStruct(char*[], int);
-void* prioritize_trains(void*);
+void load_trains(int);
 void* load(void*);
 // =========================
 
@@ -38,16 +30,15 @@ void* load(void*);
 
 // ======== Globals =========
 train* trainSet[MAX_NTRAINS];
-train* readyTrainSet[MAX_NTRAINS];
+bool beginLoading = false;
 // ==========================
 
 // === Condition Variables & Mutexes ===
-pthread_t mainThreads[3];
-pthread_cond_t readyTrain_cond = PTHREAD_COND_INITIALIZER;
-pthread_mutex_t readyTrainSet_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t loadingCV = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t loadingMutex = PTHREAD_MUTEX_INITIALIZER;
 // =====================================
 
-int main(int argc, char* argv[])
+void main(int argc, char* argv[])
 {
 	char* filename = argv[1];
 	int ntrains = atoi(argv[2]);
@@ -56,21 +47,12 @@ int main(int argc, char* argv[])
 		perror("specify at least one train");
 		exit(1);
 	}
-	params* parameters;
-	parameters->filename = filename;
-	parameters->ntrains = ntrains;
-	pthread_create(&mainThreads[0], NULL, init_trains, (void*)parameters);
-	pthread_join(mainThreads[0], NULL);
-	pthread_create(&mainThreads[1], NULL, prioritize_trains, (void*)parameters);
-	pthread_join(mainThreads[1], NULL);
-	return 0;
+	init_trains(filename, ntrains);
+	load_trains(ntrains);
 }
 
-void* init_trains(void* p)
+void init_trains(char* filename, int ntrains)
 {
-	params* parameters = (params*)p;
-	char* filename = (char*)parameters->filename;
-	int ntrains = (int)parameters->ntrains;
 	FILE* file = fopen(filename, "r");
 	ssize_t l_length;
 	size_t len = 0;
@@ -117,47 +99,44 @@ void init_trainStruct(char* trainData[4], int trainId)
 	trainStruct->dir = *trainData[0];
 	trainStruct->loadTime = atof(trainData[1]);
 	trainStruct->crossTime = atof(trainData[2]);
-	pthread_create(&trainStruct->thread, NULL, load, (void*)trainStruct);
 	// store the train struct in the trainSet based on its tid
 	trainSet[trainStruct->tid] = trainStruct;
 }
 
-void* prioritize_trains(void* p)
+void load_trains(int ntrains)
 {
-	printf("prioritizing...\n");
-	params* parameters = (params*)p;
-	int ntrains = (int)parameters->ntrains;
-	for(;;)
+	int i;
+	for(i=0; i<ntrains; i++)
 	{
-		pthread_mutex_lock(&readyTrainSet_mutex);
-		// wait for a train to signal that it's ready
-		pthread_cond_wait(&readyTrain_cond, &readyTrainSet_mutex);
-		// print all ready trains
-		int i;
-		for(i=0; i<ntrains; i++)
-		{
-			if(readyTrainSet[i])
-				printf("Train %d is ready\n",i);
-		}
-		printf("\n");
-		//train* nextTrain = get_nextTrain();
-		pthread_mutex_unlock(&readyTrainSet_mutex);
+		printf("starting train %d\n", i);
+		if(pthread_cond_init(&trainSet[i]->condVar, NULL) != 0)
+			perror("pthread_cond_init");
+		// start the loading process
+		pthread_create(&trainSet[i]->thread, NULL, load, (void*)trainSet[i]);
+		// wait for this train to finish loading
+		printf("joining...\n");
+		pthread_join(trainSet[i]->thread, NULL);
 	}
+
+	for(i=0; i<ntrains; i++)
+	{
+		printf("signalling train %d\n",i);
+		// signal all threads to start loading
+		pthread_cond_signal(&trainSet[i]->condVar);
+	}
+	//beginLoading = true;
+
 }
 
 void* load(void* ptr)
 {
 	train* trainStruct = (train*)ptr;
+	// wait to be signalled to load before loading
+	//while(!beginLoading){}
+	pthread_cond_wait(&trainStruct->condVar, &loadingMutex);
 	printf("Train %d loading for %fsec...\n",trainStruct->tid, (trainStruct->loadTime)/10);
 	unsigned int microsec = (trainStruct->loadTime)*100000;
 	usleep(microsec);
 	printf("Train %d done loading\n",trainStruct->tid);
-	// lock the ready train set mutex
-	pthread_mutex_lock(&readyTrainSet_mutex);
-	// put self into train ready set
-	readyTrainSet[trainStruct->tid] = trainStruct;
-	// signal ready train condvar? - to tell main thread to re-prioritize?
-	pthread_cond_signal(&readyTrain_cond);
-	// unlock mutex
-	pthread_mutex_unlock(&readyTrainSet_mutex);
 }
+
