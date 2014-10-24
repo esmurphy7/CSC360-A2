@@ -54,6 +54,24 @@ int list_remove(NODE *list, NODE *node)
 		return 0;		
 	} else return -1;
 }
+int list_remove_data(NODE* list, void* data)
+{
+	NODE* current = list->next;
+	NODE* prevCur = list;
+	while(current && current->data != data)
+	{
+		prevCur = current;
+		current = current->next;
+	}
+	if(current)
+	{
+		prevCur->next = current->next;
+		free(current);
+		return 0;
+	}
+	else
+		return -1;
+}
 int list_foreach(NODE *node, int(*func)(void*))
 {
 	while(node) {
@@ -79,4 +97,26 @@ int findstring(void *listdata, void *searchdata)
 {
 	return strcmp((char*)listdata, (char*)searchdata)?0:1;
 }
-
+int list_isEmpty(NODE* list)
+{
+	NODE* current = list->next;
+	while(current)
+	{
+		if(current->data)
+			return 0; // false
+		current = current->next;
+	}
+	return 1; // true
+}
+int list_get_length(NODE* list)
+{
+	int count = 0;
+	NODE* current = list->next;
+	while(current)
+	{
+		count++;
+		current = current->next;
+	}
+	//printf("list length: %d\n",count);
+	return count;
+}

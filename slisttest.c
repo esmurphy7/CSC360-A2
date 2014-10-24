@@ -1,10 +1,17 @@
 #include "slist.h"
 
+
 int main()
 {
-	NODE *list, *second, *inserted;
+	NODE *list = list_create(NULL);
+	NODE *second, *inserted;
 	NODE *match;
-
+	if(list->data == NULL)
+		printf("list empty\n");
+	//printf("data %s\n",(char*)(list->data));
+	NODE* templist = list;
+	if(templist->data == NULL)
+		printf("templist empty\n");
 	/* Create initial elements of list */
 	list=list_create((void*)"First");
 	second=list_insert_after(list, (void*)"Second");
@@ -32,10 +39,18 @@ int main()
 	list_foreach(list, printstring);
 	putchar('\n');
 
+	/* Remove the element with data */
+	list_remove_data(list, "First");
+	printf("After list_remove_data():\n");
+	list_foreach(list, printstring);
+	putchar('\n');
+	
 	/* Search */
 	if((match=list_find(list, findstring, "Third")))
 		printf("Found \"Third\"\n");
 	else printf("Did not find \"Third\"\n");
 
+	free(list);
+	
 	return 0;
 }
