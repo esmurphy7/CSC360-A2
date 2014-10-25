@@ -1,6 +1,4 @@
 
-// TODO: 
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,6 +7,7 @@
 #include <unistd.h>
 #include "slist.h"
 
+// ======= Prototypes ======
 typedef struct
 {
 	int tid;
@@ -25,25 +24,26 @@ typedef struct
 	int ntrains;
 } params;
 
-// ======= Prototypes ======
 void* init_trains(void*);
 void init_trainStruct(char*[], int);
-void* prioritize_trains(void*);
+void* dispatch_trains(void*);
 void insert_train(train*);
 void remove_train(train*);
 void* train_sequence(void*);
 train* get_nextTrain(char);
 char* get_setAbv(NODE*);
+char* get_dirString(train*);
 // =========================
+
 
 // ======= Constants ========
 #define MAX_NTRAINS 100
 // ==========================
 
+
 // ====== Shared Data =======
 train* trainSet[MAX_NTRAINS];
-train* readyTrainSet[MAX_NTRAINS];
-/* Ready train subsets 
+/* Ordered sets of trains ready to cross
 	H: high priority
 	L: low priority
 	E: east
@@ -54,11 +54,14 @@ NODE* HW;
 NODE* LW;
 /* Preferred crossing direction */
 char preferred;
+/* Trains left to cross */
+int trainsLeft;
 // ==========================
+
 
 // === Condition Variables & Mutexes ===
 pthread_t mainThreads[3];
-/* Restrict access to ready train sets */
+/* Restrict access to the sets of trains ready to cross */
 pthread_cond_t readyTrain_cond = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t readyTrainSet_mutex = PTHREAD_MUTEX_INITIALIZER;
 /* Restrict crossing access */
@@ -66,28 +69,39 @@ pthread_cond_t cross_cond = PTHREAD_COND_INITIALIZER;
 pthread_mutex_t cross_mutex = PTHREAD_MUTEX_INITIALIZER;
 // =====================================
 
+
+
 int main(int argc, char* argv[])
 {
-	char* filename = argv[1];
-	int ntrains = atoi(argv[2]);
-	if(ntrains <= 0)
+	if(!argv[2] || argc < 3)
 	{
-		perror("specify at least one train");
+		printf("specify an input file and/or at least one train\n");
 		exit(1);
 	}
+	char* filename = argv[1];
+	int ntrains = atoi(argv[2]);
+	trainsLeft = ntrains;
 	params* parameters;
 	parameters->filename = filename;
 	parameters->ntrains = ntrains;
-	// initialization thread
+	// initialization thread: reads file, creates train structs, and creates train threads
 	pthread_create(&mainThreads[0], NULL, init_trains, (void*)parameters);
 	pthread_join(mainThreads[0], NULL);
-	// dispatcher thread: prioritizes trains and handles crossing
+	// initialize ready subsets
 	HE = list_create(NULL);
 	HW = list_create(NULL);
 	LE = list_create(NULL);
 	LW = list_create(NULL);
-	pthread_create(&mainThreads[1], NULL, prioritize_trains, (void*)parameters);
-	pthread_join(mainThreads[1], NULL);
+	// dispatcher thread: prioritizes trains and synchronizes crossing
+	pthread_create(&mainThreads[1], NULL, dispatch_trains, (void*)parameters);
+	// wait for dispatcher thread to exit
+	void* status;
+	pthread_join(mainThreads[1], &status);
+	
+	free(HE);
+	free(HW);
+	free(LE);
+	free(LW);
 	return 0;
 }
 
@@ -133,6 +147,8 @@ void* init_trains(void* p)
 	fclose(file);
 	if(line)
 		free(line);
+	// return for compiler
+	return NULL;
 }
 
 void init_trainStruct(char* trainData[4], int trainId)
@@ -151,7 +167,7 @@ void* train_sequence(void* ptr)
 {
 	// Begin the loading process
 	train* trainStruct = (train*)ptr;
-	printf("Train %d loading for %fsec...\n",trainStruct->tid, (trainStruct->loadTime)/10);
+	//printf("Train %d loading for %fsec...\n",trainStruct->tid, (trainStruct->loadTime)/10);
 	unsigned int microsec = (trainStruct->loadTime)*100000;
 	// load
 	usleep(microsec);
@@ -161,24 +177,26 @@ void* train_sequence(void* ptr)
 	pthread_mutex_unlock(&readyTrainSet_mutex);
 	// signal ready train condvar to tell main thread to re-prioritize
 	pthread_cond_signal(&readyTrain_cond);
-	printf("Train %d done loading\n",trainStruct->tid);
+	printf("Train %d is ready to go %s\n",trainStruct->tid, get_dirString(trainStruct));
 	
 	// Begin crossing process
 	pthread_mutex_lock(&cross_mutex);
 	// wait on the train-specific cond var to be signalled by dispatcher thread
-	printf("\nTrain %d: waiting to cross..\n",trainStruct->tid);
+	//printf("\nTrain %d: waiting to cross..\n",trainStruct->tid);
 	pthread_cond_wait(&trainStruct->condVar, &cross_mutex);
 	pthread_mutex_unlock(&cross_mutex);
 	// request to cross
 	pthread_mutex_lock(&cross_mutex);
-	printf("Train %d crossing for %fsec...\n",trainStruct->tid, (trainStruct->crossTime)/10);
+	printf("Train %d is ON the main track going %s\n",trainStruct->tid, get_dirString(trainStruct));
 	microsec = (trainStruct->crossTime)*100000;
 	// cross
 	usleep(microsec);
 	pthread_mutex_unlock(&cross_mutex);
 	
 	pthread_mutex_lock(&readyTrainSet_mutex);
-	printf("Train %d: DONE CROSSING\n\n",trainStruct->tid);
+	printf("Train %d is OFF the main track going %s\n",trainStruct->tid, get_dirString(trainStruct));
+	// decrement the number of trains that still need to cross
+	trainsLeft--;
 	// switch preferred direction
 	if(trainStruct->dir == 'E' || trainStruct->dir == 'e')
 		preferred = 'W';
@@ -189,6 +207,8 @@ void* train_sequence(void* ptr)
 	// signal done crossing
 	//pthread_cond_signal(&cross_cond);
 	pthread_mutex_unlock(&readyTrainSet_mutex);
+	// return for compiler
+	return NULL;
 }
 
 // Insert the train into the correct ready subset.
@@ -213,7 +233,6 @@ void insert_train(train* trainStruct)
 	{
 		targetTrainSet = LW;
 	}
-	char* setAbv = get_setAbv(targetTrainSet);
 	// Initialize the subset if need be
 	if(targetTrainSet == NULL)
 	{
@@ -224,18 +243,6 @@ void insert_train(train* trainStruct)
 	{
 		targetTrainSet = list_insert_after(targetTrainSet, (void*)trainStruct);
 		//printf("Train %d: inserted self\n",trainStruct->tid);
-	}
-	// print each element of target set
-	NODE* current = targetTrainSet;
-	//printf("Train %d: set %s after being inserted:\n",trainStruct->tid,setAbv);
-	while(current)
-	{
-		if(current->data)
-		{		
-			train* trStr = (train*)current->data;
-			//printf("%d\n",trStr->tid);	
-		}
-		current = current->next;
 	}
 }
 
@@ -260,61 +267,49 @@ void remove_train(train* trainStruct)
 	{
 		targetTrainSet = LW;
 	}
-	char* setAbv = get_setAbv(targetTrainSet);
 	if(targetTrainSet == NULL)
 		perror("attempting to remove train from null set");
 	else
 		list_remove_data(targetTrainSet, (void*)trainStruct);
-	// print each element of target set
-	NODE* current = targetTrainSet;
-	//printf("Train %d: set %s after being removed:\n",trainStruct->tid,setAbv);
-	while(current)
-	{
-		if(current->data)
-		{		
-			train* trStr = (train*)current->data;
-			//printf("%d\n",trStr->tid);	
-		}
-		current = current->next;
-	}
 }
 
-void* prioritize_trains(void* p)
+void* dispatch_trains(void* p)
 {
-	params* parameters = (params*)p;
-	int ntrains = (int)parameters->ntrains;
 	train* nextTrain = NULL;
 	preferred = 'E';
 	for(;;)
 	{
+		if(trainsLeft <= 0)
+		{
+			void* status = (void*)malloc(sizeof(void*)*100);
+			printf("Dispatcher: all trains done crossing\n");
+			pthread_exit((void*)status);
+		}
 		// if there isn't a next train
 		if(nextTrain == NULL)
 		{
 			// wait for one to finish loading
 			pthread_mutex_lock(&readyTrainSet_mutex);
-			printf("Dispatcher: waiting for first load...\n");
+			//printf("Dispatcher: waiting for first load...\n");
 			pthread_cond_wait(&readyTrain_cond, &readyTrainSet_mutex);
-			printf("Dispatcher: first load done..\n");
+			//printf("Dispatcher: first load done..\n");
 			nextTrain = get_nextTrain(preferred);
 			pthread_mutex_unlock(&readyTrainSet_mutex);
 		}
-		// signal the train waiting on condVar to cross
-		//printf("Dispatcher: signal train %d to cross\n",nextTrain->tid);
+		// signal the next train to cross
 		pthread_cond_signal(&nextTrain->condVar);
-		// wait for crossing threads to signal they're done
-		//printf("Dispatcher: waiting for train %d to cross..\n",nextTrain->tid);
-		//pthread_cond_wait(&cross_cond, &cross_mutex);
 		// re-evaluate which train should be next
 		pthread_mutex_lock(&readyTrainSet_mutex);
 		nextTrain = get_nextTrain(preferred);
 		pthread_mutex_unlock(&readyTrainSet_mutex);
 	}
+	// return for compiler
+	return NULL;
 }
 
 // Given the preferred direction, return the train that is next in line to cross
 train* get_nextTrain(char preferred)
 {
-	//printf("Dispatcher: preferred direction: %c\n",preferred);
 	// ready subsets of descending priority
 	NODE* firstSet;
 	NODE* secondSet;
@@ -347,13 +342,10 @@ train* get_nextTrain(char preferred)
 		targetSet = fourthSet;
 	else
 	{
-		perror("cannot get next train, all ready subsets are empty");
-		exit(1);
+		//perror("cannot get next train, all ready subsets are empty");
+		return NULL;
 	}
-	char* setAbv = get_setAbv(targetSet);
-	//printf("Dispatcher: finding next train in set %s...\n",setAbv);
-	// find the set of trains within the target set that have the lowest load time
-	//NODE* loadTrains = list_create(NULL);
+	// find the train in the target set with the best load time
 	float bestLoadTime = 1000;
 	int bestTid = 1000;
 	train* bestTrain;
@@ -364,16 +356,16 @@ train* get_nextTrain(char preferred)
 		{
 			
 			train* trainStruct = (train*)currentTrain->data;
-			//printf("Dispatcher: current train: %d\n",trainStruct->tid);
+			// found train with better load time
 			if(trainStruct->loadTime < bestLoadTime)
 			{
 				bestLoadTime = trainStruct->loadTime;
-				//printf("Dispatcher: new best load time detected\n");
 				bestTrain = trainStruct;
 			}
+			// found train with same load time as the best so far
 			else if(trainStruct->loadTime == bestLoadTime)
 			{
-				//printf("Dispatcher: best load time tied %f\n",bestLoadTime);
+				// found train with tid of higher priority
 				if(trainStruct->tid < bestTid)
 				{
 					bestTid = trainStruct->tid;
@@ -384,42 +376,19 @@ train* get_nextTrain(char preferred)
 		currentTrain = currentTrain->next;
 	}
 	return bestTrain;
-	/*
-	train* bestTrain;
-	// if more than one train tied for best load time
-	if(list_get_length(loadTrains) > 2)
-	{
-		printf("Dispatcher: more than one best load time\n");
-		// find the best train in the most prioritized set
-		int bestTid = 1000;
-		currentTrain = loadTrains;
-		while(currentTrain)
-		{
-			if(currentTrain->data)
-			{
-				train* trainStruct = (train*)currentTrain->data;
-				//printf("Dispatcher: current tid %d\n",bestTid);
-				if(trainStruct->tid < bestTid && trainStruct->tid != NULL)
-				{
-					//printf("Dispatcher: current tid %d\n",bestTid); 
-					bestTid = trainStruct->tid;
-				}
-				//printf("Dispatcher: current tid %d\n",bestTid);
-			}
-			currentTrain = currentTrain->next;	
-		}
-		
-		bestTrain = trainSet[bestTid];
-	}
+}
+
+char* get_dirString(train* trainStruct)
+{
+	char dir = trainStruct->dir;
+	char* dirString;
+	if(dir == 'E' || dir == 'e')
+		dirString = "East";
+	else if(dir == 'W' || dir == 'w')
+		dirString = "West";
 	else
-	{
-		bestTrain = (train*)loadTrains->data;
-		//printf("Dispatcher: single best load time by train %d: %f\n",bestTrain->tid,bestTrain->loadTime);
-		
-	}
-	//printf("Dispatcher: train %d crosses next\n", bestTrain->tid);
-	return bestTrain;
-	*/
+		printf("cannot get direction string\n");
+	return dirString;
 }
 
 char* get_setAbv(NODE* targetSet)
